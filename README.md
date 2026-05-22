@@ -32,8 +32,8 @@ Real-time metrics auto-refresh every 30 seconds:
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/ollive-llm-platform.git
-cd ollive-llm-platform
+git clone https://github.com/shivavadtyavath/Ollive-LLM-Platform.git
+cd Ollive-LLM-Platform
 
 # 2. Add your Groq API key (free at console.groq.com)
 echo "GROQ_API_KEY=your_key_here" >> backend/.env
