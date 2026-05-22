@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+*.pyc
+
+# Environment — never commit secrets
+backend/.env
+*.env.local
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+screenshots/desktop.ini
+
+# Docker volumes / logs
+*.log
+
+# Alembic auto-generated versions (keep template, not generated files)
+backend/alembic/versions/*.py
+
+# Assignment PDF — not part of source code
+*.pdf
