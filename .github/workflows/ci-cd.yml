@@ -12,25 +12,25 @@ env:
   FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/ollive-frontend
 
 jobs:
-  # ── Lint & Test ─────────────────────────────────────────────────────────────
+  # ── Lint & Build Check ───────────────────────────────────────────────────────
   test:
-    name: Lint & Syntax Check
+    name: Lint & Build Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Check Python syntax
+      - name: Check Python syntax (all files)
         run: |
-          python -m py_compile backend/app/main.py
           find backend/app -name "*.py" | xargs python -m py_compile
-          echo "All Python files OK"
+          find sdk -name "*.py" | xargs python -m py_compile
+          echo "✅ All Python files OK"
 
-      - name: Set up Node
+      - name: Set up Node 20
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -44,6 +44,13 @@ jobs:
       - name: Build frontend
         run: npm run build
         working-directory: frontend
+
+      - name: Verify k8s manifests structure
+        run: |
+          test -f k8s/base/kustomization.yaml && echo "✅ base kustomization OK"
+          test -f k8s/overlays/dev/kustomization.yaml && echo "✅ dev overlay OK"
+          test -f k8s/overlays/prod/kustomization.yaml && echo "✅ prod overlay OK"
+          test -f k8s/deploy.sh && echo "✅ deploy script OK"
 
   # ── Build & Push Docker Images ───────────────────────────────────────────────
   build:
@@ -90,51 +97,76 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Summary
+        run: |
+          echo "### Images pushed 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.BACKEND_IMAGE }}:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.FRONTEND_IMAGE }}:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+
   # ── Deploy to Self-Hosted k8s ────────────────────────────────────────────────
+  # Requires KUBECONFIG secret to be set in repo settings.
+  # Skip gracefully if no cluster is configured.
   deploy:
     name: Deploy to k8s
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main'
-    environment: production
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check if KUBECONFIG secret is available
+        id: check_kubeconfig
+        run: |
+          if [ -z "${{ secrets.KUBECONFIG }}" ]; then
+            echo "available=false" >> $GITHUB_OUTPUT
+            echo "⚠️ KUBECONFIG secret not set — skipping k8s deploy"
+            echo "To enable: add KUBECONFIG secret in repo Settings → Secrets"
+          else
+            echo "available=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Set up kubectl
+        if: steps.check_kubeconfig.outputs.available == 'true'
         uses: azure/setup-kubectl@v3
         with:
           version: "v1.29.0"
 
+      - name: Set up Kustomize
+        if: steps.check_kubeconfig.outputs.available == 'true'
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
       - name: Configure kubeconfig
+        if: steps.check_kubeconfig.outputs.available == 'true'
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      - name: Set up Kustomize
-        run: |
-          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-          sudo mv kustomize /usr/local/bin/
-
-      - name: Update image tags
+      - name: Update image tags in prod overlay
+        if: steps.check_kubeconfig.outputs.available == 'true'
         run: |
           cd k8s/overlays/prod
           kustomize edit set image \
             ollive-backend=${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
             ollive-frontend=${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
 
-      - name: Apply manifests
+      - name: Apply manifests to cluster
+        if: steps.check_kubeconfig.outputs.available == 'true'
         run: |
           kustomize build k8s/overlays/prod | kubectl apply -f -
 
       - name: Wait for rollout
+        if: steps.check_kubeconfig.outputs.available == 'true'
         run: |
-          kubectl rollout status deployment/backend -n ollive --timeout=120s
-          kubectl rollout status deployment/frontend -n ollive --timeout=120s
+          kubectl rollout status deployment/backend  -n ollive --timeout=120s
+          kubectl rollout status deployment/frontend -n ollive --timeout=60s
 
-      - name: Verify health
+      - name: Verify deployment
+        if: steps.check_kubeconfig.outputs.available == 'true'
         run: |
-          kubectl get pods -n ollive
-          kubectl get svc -n ollive
+          kubectl get pods    -n ollive
+          kubectl get svc     -n ollive
           kubectl get ingress -n ollive
