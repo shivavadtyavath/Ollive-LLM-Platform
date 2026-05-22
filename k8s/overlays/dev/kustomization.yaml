@@ -1,0 +1,78 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ollive
+
+bases:
+  - ../../base
+
+# Dev: single replicas, debug on, NodePort for direct access
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: backend
+        namespace: ollive
+      spec:
+        replicas: 1
+    target:
+      kind: Deployment
+      name: backend
+
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: frontend
+        namespace: ollive
+      spec:
+        replicas: 1
+    target:
+      kind: Deployment
+      name: frontend
+
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: backend-config
+        namespace: ollive
+      data:
+        DEBUG: "true"
+    target:
+      kind: ConfigMap
+      name: backend-config
+
+  # Expose frontend directly via NodePort in dev
+  - patch: |-
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: frontend
+        namespace: ollive
+      spec:
+        type: NodePort
+        ports:
+          - port: 80
+            targetPort: 80
+            nodePort: 30080
+    target:
+      kind: Service
+      name: frontend
+
+  - patch: |-
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: backend
+        namespace: ollive
+      spec:
+        type: NodePort
+        ports:
+          - port: 8000
+            targetPort: 8000
+            nodePort: 30800
+    target:
+      kind: Service
+      name: backend

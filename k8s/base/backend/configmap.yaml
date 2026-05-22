@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: ollive
+data:
+  DATABASE_URL: "postgresql+asyncpg://ollive:ollive@postgres:5432/ollive"
+  DATABASE_SYNC_URL: "postgresql://ollive:ollive@postgres:5432/ollive"
+  REDIS_URL: "redis://redis:6379/0"
+  OLLAMA_BASE_URL: "http://ollama:11434"
+  DEFAULT_PROVIDER: "groq"
+  DEFAULT_MODEL: "llama-3.1-8b-instant"
+  DEBUG: "false"
+  PII_REDACTION_ENABLED: "true"
+  MAX_CONTEXT_MESSAGES: "20"
+  ALLOWED_ORIGINS: '["http://localhost:3000","https://ollive.yourdomain.com"]'

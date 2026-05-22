@@ -315,5 +315,46 @@ npm run dev   # http://localhost:5173
 | Database | PostgreSQL 16 |
 | Cache | Redis 7 |
 | LLM | OpenAI-compatible SDK (Groq, Ollama, OpenRouter, OpenAI) |
-| Infra | Docker Compose, Nginx |
+| Infra | Docker Compose, Nginx, Kubernetes, Kustomize |
 | Streaming | Server-Sent Events (SSE) |
+| CI/CD | GitHub Actions |
+
+---
+
+## Kubernetes — Self-Hosted Deployment
+
+Full k8s manifests are in the [`k8s/`](./k8s/) directory using Kustomize with dev and prod overlays.
+
+```
+k8s/
+├── base/              # shared manifests (deployments, services, HPA, ingress)
+├── overlays/dev/      # single replica, NodePort, debug mode
+└── overlays/prod/     # 3 replicas, TLS ingress, HPA (2→10 pods)
+```
+
+### One-command deploy to self-hosted k8s
+
+```bash
+# Dev (minikube / k3s)
+./k8s/deploy.sh dev
+# → Frontend: http://<node-ip>:30080
+# → API Docs: http://<node-ip>:30800/docs
+
+# Prod
+./k8s/deploy.sh prod
+```
+
+### What's included
+- **Namespace** isolation (`ollive`)
+- **Secrets** management (Groq API key, DB password)
+- **Init containers** — backend waits for postgres + redis to be healthy before starting
+- **HPA** — backend autoscales 2→10 pods based on CPU (70%) and memory (80%)
+- **Rolling updates** — zero-downtime deploys (`maxUnavailable: 0`)
+- **Health checks** — liveness + readiness probes on all services
+- **Resource limits** — CPU and memory requests/limits on every container
+- **Persistent storage** — 5Gi PVC for PostgreSQL
+- **Ingress** — nginx with SSE/streaming support (`proxy-buffering: off`)
+- **TLS** — cert-manager integration for HTTPS in prod
+- **CI/CD** — GitHub Actions builds images and deploys on every push to main
+
+See [`k8s/README.md`](./k8s/README.md) for full setup instructions.
